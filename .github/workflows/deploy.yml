@@ -1,37 +1,33 @@
 name: Build & Deploy webapp (Next.js) to EC2
 on:
   push:
-    branches: [ main ]        # deploy to the main
+    branches: [ main ]
 
 permissions:
-  contents: read              # checkout needs
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1 ── check out repo
       - uses: actions/checkout@v4
 
-      # 2 ── Node toolchain
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
+          cache: npm
 
-      # 3 ── install & build Next.js
       - name: Install deps
         run: npm ci
-      - name: Build Next.js
-        run: npm run build                
 
-      # 4 ── package everything the server needs
+      - name: Build Next.js
+        run: npm run build
+
       - name: Pack release
         run: |
           tar czf release.tgz \
             .next public package*.json start_next.sh
 
-      # 5 ── hand the bundle to the deploy job
       - uses: actions/upload-artifact@v4
         with:
           name: build
@@ -40,37 +36,34 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: http://${{ secrets.EC2_HOST }}
+    environment: production          # ← no secrets here
+    env:                             # runtime-visible copy of the host
+      EC2_HOST: ${{ secrets.EC2_HOST }}
     steps:
-      # 6 ── pull the bundle produced above
       - uses: actions/download-artifact@v4
         with:
           name: build
 
-      # 7 ── copy it to the EC2 box
       - name: Copy bundle to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user                # ← changed
+          host: ${{ env.EC2_HOST }}   # ← use env var instead
+          username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           source: release.tgz
-          target: /home/ec2-user/app        # ← changed
+          target: /home/ec2-user/app
           overwrite: true
 
-      # 8 ── unpack & start the app
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ env.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euxo pipefail
+            mkdir -p /home/ec2-user/app
             cd /home/ec2-user/app
             tar xzf release.tgz
             chmod +x start_next.sh
-            ./start_next.sh                 # ← runs your script
-
+            ./start_next.sh
