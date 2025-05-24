@@ -28,12 +28,13 @@ jobs:
       - name: Copy bundle to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host: ${{ env.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           source: release.tgz
           target: /home/ec2-user/app
           overwrite: true
+          rmkdir: true
 
       - name: Execute remote script
         uses: appleboy/ssh-action@v1.0.3
