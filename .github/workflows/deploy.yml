@@ -4,27 +4,27 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read              # checkout needs this
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15       # hard stop if something hangs
+    timeout-minutes: 15
     environment: production
-    env:                      # make host reusable in steps
+    env:
       EC2_HOST: ${{ secrets.EC2_HOST }}
 
     steps:
-      # 1 ── pull repo
       - uses: actions/checkout@v4
 
-      # 2 ── bundle every repo file (incl. docs)
       - name: Create release archive
         run: |
-          tar --exclude='.git' --exclude='node_modules' \
+          tar --exclude='.git' \
+              --exclude='node_modules' \
+              --exclude='release.tgz' \
+              --warning=no-file-changed \
               -czf release.tgz .
 
-      # 3 ── copy to the EC2 box
       - name: Copy bundle to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -35,7 +35,6 @@ jobs:
           target: /home/ec2-user/app
           overwrite: true
 
-      # 4 ── unpack & run your script
       - name: Execute remote script
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -44,15 +43,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euxo pipefail
-            # ensure deploy directory exists
             mkdir -p /home/ec2-user/app
             cd /home/ec2-user/app
-
-            # unpack (replace existing files)
             tar xzf release.tgz --overwrite
-
-            # run your start script in background so SSH can close
             chmod +x start_next.sh
             ./start_next.sh &
-
-            exit 0                # tell GitHub the step succeeded
+            exit 0
