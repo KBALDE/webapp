@@ -27,7 +27,8 @@ jobs:
       # ⬇︎  pack *everything* so docs/**, README.md, etc. are included
       - name: Create release archive
         run: |
-          tar -czf release.tgz .
+          tar --exclude='.git' --exclude='node_modules' \
+              -czf release.tgz .
 
       - uses: actions/upload-artifact@v4
         with:
