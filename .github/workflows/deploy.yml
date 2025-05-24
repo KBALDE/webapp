@@ -1,7 +1,7 @@
 name: Build & Deploy webapp (Next.js) to EC2
 on:
   push:
-    branches: [ main ]        # deploy when main is updated
+    branches: [ main ]        # deploy to the main
 
 permissions:
   contents: read              # checkout needs this
