@@ -23,7 +23,7 @@ jobs:
       - name: Install deps
         run: npm ci
       - name: Build Next.js
-        run: npm run build                # outputs .next/
+        run: npm run build                
 
       # 4 ── package everything the server needs
       - name: Pack release
