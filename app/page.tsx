@@ -45,7 +45,7 @@ export default function Home() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Welcome to the webapp
+            Welcome to the webapp to my name is KINDI
           </a>
         </div>
       </main>
