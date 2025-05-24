@@ -1,1 +1,76 @@
-to be updated
+name: Build & Deploy webapp (Next.js) to EC2
+on:
+  push:
+    branches: [ main ]        # deploy when main is updated
+
+permissions:
+  contents: read              # checkout needs this
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1 ── check out repo
+      - uses: actions/checkout@v4
+
+      # 2 ── Node toolchain
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # 3 ── install & build Next.js
+      - name: Install deps
+        run: npm ci
+      - name: Build Next.js
+        run: npm run build                # outputs .next/
+
+      # 4 ── package everything the server needs
+      - name: Pack release
+        run: |
+          tar czf release.tgz \
+            .next public package*.json start_next.sh
+
+      # 5 ── hand the bundle to the deploy job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: release.tgz
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ secrets.EC2_HOST }}
+    steps:
+      # 6 ── pull the bundle produced above
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+
+      # 7 ── copy it to the EC2 box
+      - name: Copy bundle to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user                # ← changed
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: release.tgz
+          target: /home/ec2-user/app        # ← changed
+          overwrite: true
+
+      # 8 ── unpack & start the app
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euxo pipefail
+            cd /home/ec2-user/app
+            tar xzf release.tgz
+            chmod +x start_next.sh
+            ./start_next.sh                 # ← runs your script
+
