@@ -7,6 +7,7 @@ permissions:
   contents: read
 
 jobs:
+# ───────────────────────────────────────── BUILD ─────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     steps:
@@ -21,23 +22,26 @@ jobs:
         run: npm ci
 
       - name: Build Next.js
-        run: npm run build
+        run: npm run build           # creates .next/
 
-      - name: Pack release
+      # ⬇︎  pack *everything* so docs/**, README.md, etc. are included
+      - name: Create release archive
         run: |
-          tar czf release.tgz \
-            app public package*.json start_next.sh
+          tar --exclude='.git' --exclude='node_modules' \
+              -czf release.tgz .
 
       - uses: actions/upload-artifact@v4
         with:
           name: build
           path: release.tgz
 
+# ──────────────────────────────────────── DEPLOY ─────────────────────────────────────────
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment: production          # ← no secrets here
-    env:                             # runtime-visible copy of the host
+    timeout-minutes: 15               # safety net
+    environment: production
+    env:
       EC2_HOST: ${{ secrets.EC2_HOST }}
     steps:
       - uses: actions/download-artifact@v4
@@ -47,7 +51,7 @@ jobs:
       - name: Copy bundle to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: ${{ env.EC2_HOST }}   # ← use env var instead
+          host: ${{ env.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           source: release.tgz
@@ -62,8 +66,17 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euxo pipefail
-            mkdir -p /home/ec2-user/app
             cd /home/ec2-user/app
-            tar xzf release.tgz
+
+            # unpack, replacing previous files but keeping release.tgz itself
+            tar xzf release.tgz --overwrite
+
+            # install prod-only deps, build once more if you need SSR assets
+            npm ci --omit=dev
+            npm run build
+
+            # make sure the launcher is executable and start the server
             chmod +x start_next.sh
-            ./start_next.sh
+            ./start_next.sh &            # background so SSH can close
+
+            exit 0                       # let the workflow finish
