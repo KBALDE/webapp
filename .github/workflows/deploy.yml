@@ -19,11 +19,12 @@ jobs:
 
       - name: Create release archive
         run: |
+          TMP_TAR=$(mktemp /tmp/release-XXXX.tgz)
           tar --exclude='.git' \
               --exclude='node_modules' \
-              --exclude='release.tgz' \
               --warning=no-file-changed \
-              -czf release.tgz .
+              -czf "$TMP_TAR" .
+          mv "$TMP_TAR" release.tgz
 
       - name: Copy bundle to EC2
         uses: appleboy/scp-action@v0.1.4
@@ -34,7 +35,7 @@ jobs:
           source: release.tgz
           target: /home/ec2-user/app
           overwrite: true
-          rmkdir: true
+          rmkdir: true                # create the target dir if missing
 
       - name: Execute remote script
         uses: appleboy/ssh-action@v1.0.3
@@ -44,7 +45,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euxo pipefail
-            mkdir -p /home/ec2-user/app
             cd /home/ec2-user/app
             tar xzf release.tgz --overwrite
             chmod +x start_next.sh
